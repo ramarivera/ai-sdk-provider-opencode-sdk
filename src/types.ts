@@ -138,6 +138,13 @@ export interface OpencodeSettings {
    * @default false
    */
   verbose?: boolean;
+
+  /**
+   * Automatically reply "once" to permission requests while streaming.
+   * This is useful for hosts that do not surface tool-approval-request chunks.
+   * @default false
+   */
+  autoApprovePermissions?: boolean;
 }
 
 /**

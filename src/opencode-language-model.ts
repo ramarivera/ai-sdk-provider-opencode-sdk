@@ -24,6 +24,7 @@ import {
   createStreamStartPart,
   isEventForSession,
   isSessionComplete,
+  type EventPermissionAsked,
   type Message,
   type Part,
 } from "./convert-from-opencode-events.js";
@@ -51,6 +52,17 @@ interface ApprovalClient {
       directory?: string;
     }) => Promise<unknown> | unknown;
   };
+}
+
+/**
+ * OpenCode currently processes stream chunks through an AI SDK transform that
+ * does not recognize `tool-approval-request` parts. Emit filtering keeps
+ * generation alive while approvals are handled server-side in OpenCode.
+ */
+function shouldSkipStreamPartForHostCompatibility(
+  part: LanguageModelV3StreamPart,
+): boolean {
+  return (part as { type?: string }).type === "tool-approval-request";
 }
 
 /**
@@ -486,12 +498,29 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
                 continue;
               }
 
+              if (
+                this.settings.autoApprovePermissions &&
+                event.type === "permission.asked"
+              ) {
+                await this.autoApprovePermissionRequest(
+                  client,
+                  sessionId,
+                  event as EventPermissionAsked,
+                );
+              }
+
               const streamParts = convertEventToStreamParts(
                 event,
                 state,
                 logger,
               );
               for (const part of streamParts) {
+                if (shouldSkipStreamPartForHostCompatibility(part)) {
+                  logger.debug?.(
+                    "Skipping unsupported stream part: tool-approval-request",
+                  );
+                  continue;
+                }
                 safeEnqueue(part);
               }
 
@@ -704,6 +733,42 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
     const created = new Set<string>();
     this.repliedApprovalIdsBySession.set(sessionId, created);
     return created;
+  }
+
+  private async autoApprovePermissionRequest(
+    client: ApprovalClient,
+    sessionId: string,
+    event: EventPermissionAsked,
+  ): Promise<void> {
+    const permissionApi = client.permission;
+    if (typeof permissionApi?.reply !== "function") {
+      return;
+    }
+
+    const requestId = event.properties.id?.trim();
+    if (!requestId) {
+      return;
+    }
+
+    const repliedApprovalIds = this.getRepliedApprovalIdsForSession(sessionId);
+    if (repliedApprovalIds.has(requestId)) {
+      return;
+    }
+
+    const directory = this.getRequestDirectory();
+
+    try {
+      await permissionApi.reply({
+        requestID: requestId,
+        reply: "once",
+        ...(directory ? { directory } : {}),
+      });
+      repliedApprovalIds.add(requestId);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to auto-approve permission request ${requestId}: ${extractErrorMessage(error)}`,
+      );
+    }
   }
 
   /**

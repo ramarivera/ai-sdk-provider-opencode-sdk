@@ -46,6 +46,7 @@ export const opcodeSettingsSchema = z.object({
   outputFormatRetryCount: z.number().int().nonnegative().optional(),
   logger: z.union([loggerSchema, z.literal(false)]).optional(),
   verbose: z.boolean().optional(),
+  autoApprovePermissions: z.boolean().optional(),
 });
 
 /**
