@@ -62,7 +62,15 @@ interface ApprovalClient {
 function shouldSkipStreamPartForHostCompatibility(
   part: LanguageModelV3StreamPart,
 ): boolean {
-  return (part as { type?: string }).type === "tool-approval-request";
+  const type = (part as { type?: string }).type ?? "";
+  return (
+    type === "tool-approval-request" ||
+    type === "tool-input-start" ||
+    type === "tool-input-delta" ||
+    type === "tool-input-end" ||
+    type === "tool-call" ||
+    type === "tool-result"
+  );
 }
 
 /**
@@ -516,9 +524,7 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
               );
               for (const part of streamParts) {
                 if (shouldSkipStreamPartForHostCompatibility(part)) {
-                  logger.debug?.(
-                    "Skipping unsupported stream part: tool-approval-request",
-                  );
+                  logger.debug?.(`Skipping unsupported stream part: ${part.type}`);
                   continue;
                 }
                 safeEnqueue(part);
