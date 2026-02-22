@@ -1014,7 +1014,7 @@ describe("convert-from-opencode-events", () => {
       const finishPart = parts.find((p) => p.type === "finish");
       expect(finishPart).toMatchObject({
         type: "finish",
-        finishReason: { unified: "stop", raw: undefined },
+        finishReason: "stop",
         usage: {
           inputTokens: {
             total: 115,

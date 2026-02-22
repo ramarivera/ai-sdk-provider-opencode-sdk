@@ -872,6 +872,9 @@ export function createFinishParts(
     },
   };
 
+  const normalizedFinishReason =
+    typeof finishReason === "string" ? finishReason : finishReason.unified;
+
   if (state.textStarted && state.textPartId) {
     parts.push({ type: "text-end", id: state.textPartId });
   }
@@ -883,7 +886,9 @@ export function createFinishParts(
   parts.push({
     type: "finish",
     usage,
-    finishReason,
+    // OpenCode expects a string reason in its stream processor.
+    // Keep provider mapping internal but emit normalized string here.
+    finishReason: normalizedFinishReason as unknown as LanguageModelV3FinishReason,
     providerMetadata: {
       opencode: {
         sessionId,

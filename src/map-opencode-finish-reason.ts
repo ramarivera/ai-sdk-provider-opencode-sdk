@@ -92,9 +92,11 @@ function mapFinishToReason(finish: string): LanguageModelV3FinishReason {
     return { unified: "length", raw: finish };
   }
 
-  // Tool use
+  // OpenCode executes tools server-side. Returning "tool-calls" causes host
+  // runtimes to attempt another tool loop and can stall completion.
+  // Treat tool-use as terminal for this provider.
   if (normalizedFinish === "tool_use" || normalizedFinish === "tool_calls") {
-    return { unified: "tool-calls", raw: finish };
+    return { unified: "stop", raw: finish };
   }
 
   // Content filter

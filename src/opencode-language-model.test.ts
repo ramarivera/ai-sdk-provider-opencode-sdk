@@ -570,6 +570,65 @@ describe("opencode-language-model", () => {
       expect((finishPart as any).finishReason).toBeDefined();
     });
 
+    it("should emit finish and close on step-finish event without session idle", async () => {
+      mockClient.event.subscribe.mockResolvedValueOnce({
+        stream: (async function* () {
+          yield {
+            type: "message.part.updated",
+            properties: {
+              part: {
+                id: "part-1",
+                sessionID: "session-123",
+                messageID: "msg-1",
+                type: "text",
+                text: "Berlin",
+              },
+              delta: "Berlin",
+            },
+          };
+          yield {
+            type: "message.part.updated",
+            properties: {
+              part: {
+                id: "part-2",
+                sessionID: "session-123",
+                messageID: "msg-1",
+                type: "step-finish",
+                reason: "end_turn",
+                cost: 0,
+                tokens: {
+                  input: 10,
+                  output: 2,
+                  reasoning: 0,
+                  cache: {
+                    read: 0,
+                    write: 0,
+                  },
+                },
+              },
+            },
+          };
+        })(),
+      });
+
+      const result = await model.doStream({
+        prompt: basicPrompt,
+      });
+
+      const parts: unknown[] = [];
+      const reader = result.stream.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+      }
+
+      const finishPart = parts.find((p: any) => p.type === "finish") as any;
+      expect(finishPart).toBeDefined();
+      expect(finishPart.finishReason).toBe("stop");
+    });
+
     it("should subscribe before applying tool approval responses", async () => {
       const promptWithApproval: LanguageModelV3Prompt = [
         {

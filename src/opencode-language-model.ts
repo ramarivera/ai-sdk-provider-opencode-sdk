@@ -405,6 +405,24 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
 
           const state = createStreamState();
           let lastMessageInfo: Message | undefined;
+          let finishEmitted = false;
+          const emitFinish = async () => {
+            if (finishEmitted) {
+              return;
+            }
+            finishEmitted = true;
+            const finishReason = mapOpencodeFinishReason(lastMessageInfo);
+            const finishParts = createFinishParts(
+              state,
+              finishReason,
+              sessionId,
+              lastMessageInfo?.id,
+            );
+            for (const part of finishParts) {
+              safeEnqueue(part);
+            }
+            await closeIterator();
+          };
           const iterator = eventStream[Symbol.asyncIterator]();
           let iteratorClosed = false;
           const closeIterator = async () => {
@@ -477,26 +495,46 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
                 safeEnqueue(part);
               }
 
+              if (event.type === "message.part.updated") {
+                const partEvent = event as { properties: { part: Part } };
+                if (partEvent.properties.part.type === "step-finish") {
+                  const stepFinish = partEvent.properties.part as {
+                    messageID: string;
+                    reason: string;
+                  };
+                  if (!lastMessageInfo) {
+                    lastMessageInfo = {
+                      id: stepFinish.messageID,
+                      sessionID: sessionId,
+                      role: "assistant",
+                      finish: stepFinish.reason,
+                    };
+                  } else if (!lastMessageInfo.finish && stepFinish.reason) {
+                    lastMessageInfo = {
+                      ...lastMessageInfo,
+                      finish: stepFinish.reason,
+                    };
+                  }
+                  await emitFinish();
+                  break;
+                }
+              }
+
               if (event.type === "message.updated") {
                 const messageEvent = event as { properties: { info: Message } };
                 if (messageEvent.properties.info.role === "assistant") {
                   lastMessageInfo = messageEvent.properties.info;
+
+                  const assistantInfo = messageEvent.properties.info;
+                  if (assistantInfo.error || assistantInfo.finish) {
+                    await emitFinish();
+                    break;
+                  }
                 }
               }
 
               if (isSessionComplete(event, sessionId)) {
-                const finishReason = mapOpencodeFinishReason(lastMessageInfo);
-                const finishParts = createFinishParts(
-                  state,
-                  finishReason,
-                  sessionId,
-                  lastMessageInfo?.id,
-                );
-                for (const part of finishParts) {
-                  safeEnqueue(part);
-                }
-
-                await closeIterator();
+                await emitFinish();
                 break;
               }
             }

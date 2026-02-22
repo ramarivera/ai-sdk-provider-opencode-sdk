@@ -38,12 +38,12 @@ describe("map-opencode-finish-reason", () => {
       expect(unified({ finish: "length" })).toBe("length");
     });
 
-    it('should return "tool-calls" for tool_use finish', () => {
-      expect(unified({ finish: "tool_use" })).toBe("tool-calls");
+    it('should return "stop" for tool_use finish', () => {
+      expect(unified({ finish: "tool_use" })).toBe("stop");
     });
 
-    it('should return "tool-calls" for tool_calls finish', () => {
-      expect(unified({ finish: "tool_calls" })).toBe("tool-calls");
+    it('should return "stop" for tool_calls finish', () => {
+      expect(unified({ finish: "tool_calls" })).toBe("stop");
     });
 
     it('should return "content-filter" for content_filter finish', () => {
@@ -65,7 +65,7 @@ describe("map-opencode-finish-reason", () => {
     it("should be case insensitive for finish values", () => {
       expect(unified({ finish: "END_TURN" })).toBe("stop");
       expect(unified({ finish: "MAX_TOKENS" })).toBe("length");
-      expect(unified({ finish: "Tool_Use" })).toBe("tool-calls");
+      expect(unified({ finish: "Tool_Use" })).toBe("stop");
     });
 
     // Error handling
