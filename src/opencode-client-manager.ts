@@ -431,13 +431,21 @@ export function createClientManagerFromSettings(
   settings: OpencodeProviderSettings,
   logger?: Logger | false,
 ): OpencodeClientManager {
-  return OpencodeClientManager.getInstance({
+  const mergedClientOptions: OpencodeClientOptions | undefined =
+    settings.headers || settings.clientOptions
+      ? {
+          ...(settings.headers ? { headers: settings.headers } : {}),
+          ...(settings.clientOptions ?? {}),
+        }
+      : undefined;
+
+  return OpencodeClientManager.createInstance({
     hostname: settings.hostname,
     port: settings.port,
     baseUrl: settings.baseUrl,
     autoStartServer: settings.autoStartServer,
     serverTimeout: settings.serverTimeout,
-    clientOptions: settings.clientOptions,
+    clientOptions: mergedClientOptions,
     client: settings.client,
     // Prefer explicit v2 directory setting; fall back to legacy cwd.
     cwd: settings.defaultSettings?.directory ?? settings.defaultSettings?.cwd,

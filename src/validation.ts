@@ -57,6 +57,7 @@ export const opcodeProviderSettingsSchema = z.object({
   baseUrl: z.string().url().optional(),
   autoStartServer: z.boolean().optional(),
   serverTimeout: z.number().int().positive().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   clientOptions: z.record(z.string(), z.unknown()).optional(),
   client: z.object({}).passthrough().optional(),
   clientManager: z.object({}).passthrough().optional(),
@@ -172,6 +173,11 @@ export function validateProviderSettings(
 
   if (settings.clientOptions) {
     const options = settings.clientOptions as Record<string, unknown>;
+    if (settings.headers && options.headers !== undefined) {
+      warnings.push(
+        "Both top-level headers and clientOptions.headers were provided; clientOptions.headers takes precedence",
+      );
+    }
     if (options.baseUrl !== undefined) {
       warnings.push(
         "clientOptions.baseUrl is ignored; use provider baseUrl or hostname/port instead",

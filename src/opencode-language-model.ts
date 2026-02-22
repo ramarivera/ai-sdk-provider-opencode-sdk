@@ -332,6 +332,25 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
       start: async (controller) => {
         const streamWarnings = [...warnings];
         let streamStartEmitted = false;
+        let controllerClosed = false;
+        const safeEnqueue = (part: LanguageModelV3StreamPart) => {
+          if (controllerClosed) {
+            return;
+          }
+          try {
+            controller.enqueue(part);
+          } catch (error) {
+            const message = extractErrorMessage(error);
+            if (
+              message.includes("Controller is already closed") ||
+              message.includes("Invalid state")
+            ) {
+              controllerClosed = true;
+              return;
+            }
+            throw error;
+          }
+        };
 
         try {
           const eventsResult = await client.event.subscribe(
@@ -352,10 +371,11 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
             streamWarnings.push(...approvalWarnings);
           }
 
-          controller.enqueue(createStreamStartPart(streamWarnings));
+          safeEnqueue(createStreamStartPart(streamWarnings));
           streamStartEmitted = true;
 
           let resolvePromptFailed: (() => void) | undefined;
+          let promptFailureError: unknown;
           const promptFailed = new Promise<void>((resolve) => {
             resolvePromptFailed = resolve;
           });
@@ -379,7 +399,7 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
 
           client.session.prompt(requestBody).catch((error: unknown) => {
             logger.error(`Prompt error: ${extractErrorMessage(error)}`);
-            controller.enqueue({ type: "error", error });
+            promptFailureError = error;
             resolvePromptFailed?.();
           });
 
@@ -413,6 +433,14 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
               ]);
 
               if (result.type === "prompt-failed") {
+                if (promptFailureError && !isAbortError(promptFailureError)) {
+                  safeEnqueue({
+                    type: "error",
+                    error: wrapError(promptFailureError, {
+                      sessionId,
+                    }),
+                  });
+                }
                 await closeIterator();
                 break;
               }
@@ -446,7 +474,7 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
                 logger,
               );
               for (const part of streamParts) {
-                controller.enqueue(part);
+                safeEnqueue(part);
               }
 
               if (event.type === "message.updated") {
@@ -465,7 +493,7 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
                   lastMessageInfo?.id,
                 );
                 for (const part of finishParts) {
-                  controller.enqueue(part);
+                  safeEnqueue(part);
                 }
 
                 await closeIterator();
@@ -478,14 +506,21 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
           }
         } catch (error) {
           if (!streamStartEmitted) {
-            controller.enqueue(createStreamStartPart(streamWarnings));
+            safeEnqueue(createStreamStartPart(streamWarnings));
           }
           if (!isAbortError(error)) {
             logger.error(`Stream error: ${extractErrorMessage(error)}`);
-            controller.enqueue({ type: "error", error: wrapError(error) });
+            safeEnqueue({ type: "error", error: wrapError(error) });
           }
         } finally {
-          controller.close();
+          if (!controllerClosed) {
+            controllerClosed = true;
+            try {
+              controller.close();
+            } catch {
+              // stream already closed
+            }
+          }
         }
       },
     });
@@ -651,9 +686,6 @@ export class OpencodeLanguageModel implements LanguageModelV3 {
       const result = await client.session.create({
         ...(directory ? { directory } : {}),
         title: this.settings.sessionTitle ?? "AI SDK Session",
-        ...(this.settings.permission
-          ? { permission: this.settings.permission }
-          : {}),
       });
 
       const data = result.data as { id: string } | undefined;

@@ -184,6 +184,13 @@ export interface OpencodeProviderSettings {
   clientOptions?: OpencodeClientOptions;
 
   /**
+   * Top-level request headers shorthand.
+   * This is primarily for host integrations that pass provider options directly
+   * (for example OpenCode `provider.<id>.options.headers`).
+   */
+  headers?: Record<string, string>;
+
+  /**
    * Preconfigured OpenCode SDK client instance.
    * When provided, this client is used directly and server management is
    * bypassed.

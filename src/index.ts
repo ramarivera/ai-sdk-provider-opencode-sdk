@@ -10,11 +10,7 @@ export type { OpencodeModelShortcut } from "./opencode-provider.js";
 export { OpencodeLanguageModel } from "./opencode-language-model.js";
 
 // Client manager exports
-export {
-  OpencodeClientManager,
-  createClientManager,
-  createClientManagerFromSettings,
-} from "./opencode-client-manager.js";
+export { OpencodeClientManager } from "./opencode-client-manager.js";
 export type { ClientManagerOptions } from "./opencode-client-manager.js";
 
 // Type exports
@@ -51,9 +47,9 @@ export {
   isTimeoutError,
   isAbortError,
   isOutputLengthError,
-  createAuthenticationError,
-  createAPICallError,
-  createTimeoutError,
+  createAuthenticationError as authenticationError,
+  createAPICallError as apiCallError,
+  createTimeoutError as timeoutError,
   extractErrorMessage,
   wrapError,
 } from "./errors.js";
@@ -63,7 +59,7 @@ export {
   getLogger,
   defaultLogger,
   silentLogger,
-  createContextLogger,
+  createContextLogger as contextLogger,
   logUnsupportedFeature,
   logUnsupportedParameter,
   logUnsupportedCallOptions,
@@ -84,9 +80,9 @@ export type {
 // Event conversion exports
 export {
   convertEventToStreamParts,
-  createStreamState,
-  createFinishParts,
-  createStreamStartPart,
+  createStreamState as streamState,
+  createFinishParts as finishParts,
+  createStreamStartPart as streamStartPart,
   isEventForSession,
   isSessionComplete,
 } from "./convert-from-opencode-events.js";
